@@ -1,9 +1,11 @@
 <?php
 require __DIR__.'/silex.phar';
 require_once __DIR__.'/vendor/swiftmailer/lib/swift_required.php';
+require_once __DIR__.'/Contact.php';
 
 use Silex\Application;
 use Silex\Extension\TwigExtension;
+use Silex\Extension\ValidatorExtension;
 use Silex\Extension\SwiftmailerExtension;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,10 +17,16 @@ $app->register(new TwigExtension(), array(
     'twig.path'       => __DIR__.'/views',
     'twig.class_path' => __DIR__.'/vendor/twig/lib',
 ));
-$app->register(new SwiftmailerExtension(), array());
+$app->register(new ValidatorExtension(), array(
+    'validator.class_path'    => __DIR__.'/vendor',
+));
+$app->register(new SwiftmailerExtension(), array(
+    'swiftmailer.class_path' => __DIR__.'/vendor/swiftmailer/lib',
+));
 // set your mailer config.
 $app['mailer.subject'] = "Email from MameForm";
 $app['mailer.address_from'] = "example@example.com";
+
 // entry
 $app->get('/', function() use ($app) {
     return $app['twig']->render('entry.twig', array());
@@ -28,15 +36,11 @@ $app->post('/', function() use ($app) {
     // validate
     $errors = array();
     // check empty
+    $contact = new Contact();
     foreach (array('name', 'email', 'message') as $k) {
-        if (trim($app['request']->get($k)) === "") {
-            $errors[] = sprintf("%s is required.", $k);
-        }
+        $contact->$k = $app['request']->get($k);
     }
-    // check email
-    if (!filter_var($app['request']->get('email'), FILTER_VALIDATE_EMAIL)) {
-        $errors[] = sprintf("email is not valid.");
-    }
+    $errors = $app['validator']->validate($contact);
     // send email
     if (count($errors) === 0) {
         $body = $app['twig']->render('mail.twig');
